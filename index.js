@@ -96,7 +96,7 @@ const initEvents = () => {
 	process.stdin.resume()
 }
 
-const getBulletChar = (x, y, lx, ly) => {
+const getBulletChar = (x, y) => {
 	const newX = parseInt(x * bulletWidth)
 	const newY = parseInt(y * bulletHeight)
 	if (newY === parseInt(bulletHeight / 2) && (newX === parseInt(bulletWidth / 2) || newX === parseInt(bulletWidth / 2) - 1)) {
@@ -251,17 +251,15 @@ const mainLoop = () => {
 		if (inPlayerFOV && distanceFromPlayer >= 0.5 && distanceFromPlayer < depth && !bullet.remove) {
 			const objectCeiling = parseInt(parseFloat(screenHeight / 2.0) - ((screenHeight / 2.0) / parseFloat(distanceFromPlayer)))
 			const objectFloor = screenHeight - objectCeiling
-			// console.log('O: ', objectCeiling, objectFloor, ' ')
 			const objectHeight = parseInt(objectFloor - objectCeiling)
 			const objectAspectRatio = parseFloat(bulletHeight / bulletWidth)
 			const objectWidth = parseInt(objectHeight / objectAspectRatio)
-			// console.log('O: ', objectHeight, objectWidth, objectCeiling, objectFloor, distanceFromPlayer)
 			const middleOfObject = (0.5 * (objectAngle / (FOV / 2.0)) + 0.5) * parseFloat(screenWidth)
 			for (let lx = 0; lx < objectWidth; lx++) {
 				for (let ly = 0; ly < objectHeight; ly++) {
 					const sampleX = parseFloat(lx / objectWidth)
 					const sampleY = parseFloat(ly / objectHeight)
-					const char = getBulletChar(sampleX, sampleY, lx, ly)
+					const char = getBulletChar(sampleX, sampleY)
 					const objectColumn = parseInt(middleOfObject + lx - (objectWidth / 2.0))
 					if (objectColumn >= 0 && objectColumn < screenWidth) {
 						if (char !== ' ' && depthBuffer[objectColumn] >= distanceFromPlayer) {
