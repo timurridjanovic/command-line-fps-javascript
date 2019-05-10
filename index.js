@@ -11,6 +11,9 @@ keypress(process.stdin)
 jetty.clear()
 
 const screen = []
+let bullets = []
+const depthBuffer = []
+
 const map = (
 	'################' +
 	'#..............#' +
@@ -34,6 +37,8 @@ const screenWidth = 120
 const screenHeight = 40
 const mapWidth = 16
 const mapHeight = 16
+const bulletHeight = 5
+const bulletWidth = 10
 const FOV = 3.14159 / 4.0
 const depth = 16.0
 const speed = 5.0
@@ -78,10 +83,27 @@ const initEvents = () => {
 				playerY += Math.cos(playerA) * speed * elapsedTime
 			}
 		}
+
+		if (key.name === 'space') {
+			const noise = (Math.random() - 0.5) * 0.1
+			const vx = Math.sin(playerA + noise) * 8.0;
+			const vy = Math.cos(playerA + noise) * 8.0;
+			bullets.push({ x: playerX, y: playerY, vx, vy })
+		}
 	})
 
 	process.stdin.setRawMode(true)
 	process.stdin.resume()
+}
+
+const getBulletChar = (x, y, lx, ly) => {
+	const newX = parseInt(x * bulletWidth)
+	const newY = parseInt(y * bulletHeight)
+	if (newY === parseInt(bulletHeight / 2) && (newX === parseInt(bulletWidth / 2) || newX === parseInt(bulletWidth / 2) - 1)) {
+		return '*'
+	}
+
+	return ' '
 }
 
 const mainLoop = () => {
@@ -152,6 +174,8 @@ const mainLoop = () => {
 		const ceiling = parseInt(parseFloat(screenHeight / 2.0) - (screenHeight / parseFloat(distanceToWall)))
 		const floor = parseInt(screenHeight - ceiling)
 
+		depthBuffer[x] = distanceToWall
+
 		// Shader walls based on distance
 		let shade = ' '
 		if (distanceToWall <= depth / 4.0) {
@@ -205,6 +229,61 @@ const mainLoop = () => {
 
 	screen[parseInt(playerX) * screenWidth + parseInt(playerY)] = 'P'
 
+	bullets.forEach(bullet => {
+		// Can object be seen?
+		const vecX = bullet.x - playerX
+		const vecY = bullet.y - playerY
+		const distanceFromPlayer = Math.sqrt(vecX * vecX + vecY * vecY)
+
+		const eyeX = Math.sin(playerA)
+		const eyeY = Math.cos(playerA)
+
+		let objectAngle = parseFloat(Math.atan2(eyeY, eyeX)) - parseFloat(Math.atan2(vecY, vecX))
+		if (objectAngle < -3.14159) {
+			objectAngle += 2.0 * 3.14159
+		}
+
+		if (objectAngle > 3.14159) {
+			objectAngle -= 2.0 * 3.14159
+		}
+
+		const inPlayerFOV = Math.abs(objectAngle) < (FOV / 2.0)
+		if (inPlayerFOV && distanceFromPlayer >= 0.5 && distanceFromPlayer < depth && !bullet.remove) {
+			const objectCeiling = parseInt(parseFloat(screenHeight / 2.0) - ((screenHeight / 2.0) / parseFloat(distanceFromPlayer)))
+			const objectFloor = screenHeight - objectCeiling
+			// console.log('O: ', objectCeiling, objectFloor, ' ')
+			const objectHeight = parseInt(objectFloor - objectCeiling)
+			const objectAspectRatio = parseFloat(bulletHeight / bulletWidth)
+			const objectWidth = parseInt(objectHeight / objectAspectRatio)
+			// console.log('O: ', objectHeight, objectWidth, objectCeiling, objectFloor, distanceFromPlayer)
+			const middleOfObject = (0.5 * (objectAngle / (FOV / 2.0)) + 0.5) * parseFloat(screenWidth)
+			for (let lx = 0; lx < objectWidth; lx++) {
+				for (let ly = 0; ly < objectHeight; ly++) {
+					const sampleX = parseFloat(lx / objectWidth)
+					const sampleY = parseFloat(ly / objectHeight)
+					const char = getBulletChar(sampleX, sampleY, lx, ly)
+					const objectColumn = parseInt(middleOfObject + lx - (objectWidth / 2.0))
+					if (objectColumn >= 0 && objectColumn < screenWidth) {
+						if (char !== ' ' && depthBuffer[objectColumn] >= distanceFromPlayer) {
+							screen[objectColumn + (parseInt(objectCeiling + ly) * screenWidth)] = char
+							depthBuffer[objectColumn] = distanceFromPlayer
+						}
+					}
+				}
+			}
+		}
+		screen[parseInt(bullet.x) * screenWidth + parseInt(bullet.y)] = '*'
+	})
+
+	bullets = bullets.map(bullet => {
+		bullet.x += bullet.vx * elapsedTime
+		bullet.y += bullet.vy * elapsedTime
+		if (map[parseInt(bullet.x) * mapWidth + parseInt(bullet.y)] === '#') {
+			bullet.remove = true
+		}
+
+		return bullet
+	}).filter(bullet => !bullet.remove)
 
 	for (let y = 0; y < screenHeight; y++) {
 		jetty.text(screen.slice(y * screenWidth, (y + 1) * screenWidth).join(''))
